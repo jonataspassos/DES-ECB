@@ -29,8 +29,7 @@
 #define bit_value(a,b)((a&(1<<b))!=0)  // a[b]
 #define bit_copy(a,b,c)(bit_value(b,c)?bit_on(a,c):bit_off(a,c)) // a[c] = b[c]
 #define bit_recive(a,b,c)(c?bit_on(a,b):bit_off(a,b)) // a[b] = c
-#define bit_on_range(i,f)(((1<<f)-1)^((1<<i)-1))
-#define bit_off_range(i,f)(~bit_on_range(i,f))
+#define bit_range(i,f)(((1<<f)-1)^((1<<i)-1))
 
 /*-------------------------------------------------------------*/
 #endif
