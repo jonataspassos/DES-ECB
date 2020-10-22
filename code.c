@@ -1,25 +1,32 @@
 #include <stdio.h>
 
-#define BIN_PAT "%c%c%c%c%c%c%c%c"
-#define TO_BIN(byte)  \
-  (byte & 0x80 ? '1' : '0'), \
-  (byte & 0x40 ? '1' : '0'), \
-  (byte & 0x20 ? '1' : '0'), \
-  (byte & 0x10 ? '1' : '0'), \
-  (byte & 0x08 ? '1' : '0'), \
-  (byte & 0x04 ? '1' : '0'), \
-  (byte & 0x02 ? '1' : '0'), \
-  (byte & 0x01 ? '1' : '0')
+#include "bitwiseop.h"
 
-// printf("..."BIN_PAT"...",TO_BIN(byte));
-// printf("..."BIN_PAT" "BIN_PAT"...",TO_BIN(byte>>8),TO_BIN(byte));
+long long int permutation (long long int value, char * positions, int size){
+    long long int ret = 0;
+    char i;
+    for(i=0;i<size;i++){
+        bit_copy(ret,value,positions[i]);
+    }
+    return ret;
+}
 
-#define bit_on(a,b)(a=a|(1<<b))     // a[b] = 1
-#define bit_off(a,b)(a=a&~(1<<b))   // a[b] = 0
-#define bit_value(a,b)((a&(1<<b))!=0)  // a[b]
-#define bit_copy(a,b,c)(bit_value(b,c)?bit_on(a,c):bit_off(a,c)) // a[c] = b[c]
-#define bit_recive(a,b,c)(c?bit_on(a,b):bit_off(a,b)) // a[b] = c
+long long int swapLR (long long int value, int axis){
+    return (value>>axis)&bit_on_range(0,axis) // L to R
+            | (value<< axis)&bit_on_range(axis,2*axis); // R to L
+}
+
+long long int shiftL_circular_split (long long int value, int axis, int shift){
+    int temp = (value >> axis-shift) & (bit_on_range(0,shift) | bit_on_range(axis,axis+shift));
+        //Salva os que estourariam já na posição nova, com todos os outros valores zerados
+    return (value << shift) // Faz o deslocamento normal (com os zeros no inicio)
+        & (bit_on_range(shift,axis) | bit_on_range(axis+shift,axis*2))
+            // zera todos os valores que entraram nas posições dos estourados
+                | temp;// inclui os estourados em suas específicas posições
+}
 
 int main(){
-
+    printf("%2x\n",swapLR(0x5A,4));
+    printf("%2x\n",swapLR(0x857A,4));
+    
 }
