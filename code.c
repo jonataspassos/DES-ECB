@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//#define DEBUG
+
 #include "bitwiseop.h"
 
 typedef enum
@@ -20,57 +22,90 @@ char *initial_permutation,
 
 Mode mode;
 
-long long int permutation(long long int value, char *positions, int size)
+uint64_t  permutation(uint64_t  value, char *positions, int sizef, int sizei)
 {
-    long long int ret = 0;
+    uint64_t  ret = 0;
     char i;
-    for (i = 0; i < size; i++)
+    
+    for (i = 0; i < sizef; i++)
     {
-        bit_copy(ret, value, positions[i]);
+    //        printf("%c %2d",(i%8)?'\0':'\n',positions[i]);
+        bit_recive(ret, sizef-i-1, bit_value(value,sizei-positions[i]));
     }
+    #ifdef DEBUG
+        printf("%016llx %016llx\n",value,ret);
+        print_8bytes(ret);
+        printf("\n");
+    #endif
     return ret;
 }
 
-long long int swapLR(long long int value, int axis)
+uint64_t  swapLR(uint64_t  value, int axis)
 {
     return (value >> axis) & bit_range(0, axis)           // L to R
            | (value << axis) & bit_range(axis, 2 * axis); // R to L
 }
 
-long long int shiftL_circular_split(long long int value, int axis, int shift)
+uint64_t  shiftL_circular_split(uint64_t  value, int axis, int shift)
 {
-    int temp = (value >> axis - shift) & (bit_range(0, shift) | bit_range(axis, axis + shift));
+    uint64_t temp = (value >> axis - shift) & (bit_range(0, shift) | bit_range(axis, axis + shift));
     //Salva os que estourariam já na posição nova, com todos os outros valores zerados
-    return (value << shift) // Faz o deslocamento normal (com os zeros no inicio)
+    uint64_t ret = (value << shift) // Faz o deslocamento normal (com os zeros no inicio)
                & (bit_range(shift, axis) | bit_range(axis + shift, axis * 2))
            // zera todos os valores que entraram nas posições dos estourados
            | temp; // inclui os estourados em suas específicas posições
+    #ifdef DEBUG
+        printf("%016llx %016llx\n",value,ret);
+        print_8bytes(ret);
+        printf("\n");
+    #endif
+    return ret;
 }
 
-long long int shiftR_circular_split(long long int value, int axis, int shift)
+uint64_t  shiftR_circular_split(uint64_t  value, int axis, int shift)
 {
-    int temp = (value << axis - shift) & (bit_range(axis - shift, axis) | bit_range(2 * axis - shift, 2 * axis));
+    uint64_t temp = (value << axis - shift) & (bit_range(axis - shift, axis) | bit_range(2 * axis - shift, 2 * axis));
     //Salva os que estourariam já na posição nova, com todos os outros valores zerados
-    return (value >> shift) // Faz o deslocamento normal (com os zeros no final)
+    uint64_t ret = (value >> shift) // Faz o deslocamento normal (com os zeros no final)
                & (bit_range(0, axis - shift) | bit_range(axis, 2 * axis - shift))
            // zera todos os valores que entraram nas posições dos estourados
            | temp; // inclui os estourados em suas específicas posições
+    #ifdef DEBUG
+        printf("%016llx %016llx\n",value,ret);
+        print_8bytes(ret);
+        printf("\n");
+    #endif
+
+    return ret;
 }
 
-long long int s_box(long long int value, char **table)
+uint64_t  s_box(uint64_t  value, char **table)
 {
     char i;
-    long long int ret = 0;
+    uint64_t  ret = 0;
+    int index;
     for (i = 0; i < 8; i++)
     {
-        ret = ret | (((long long int)(table[i][(value >> (i * 6)) & bit_range(0, 6)])) << i * 4);
+        index = (value >> (i * 6)) & bit_range(0, 6);
+        ret = ret | (((uint64_t )(table[7-i][index])) << i * 4);
     }
+    #ifdef DEBUG
+    printf("sbox %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c\n",TO_BIN(value>>40),TO_BIN(value>>32),TO_BIN(value>>24),TO_BIN(value>>16),TO_BIN(value>>8),TO_BIN(value));
+    printf("      %c%c%c%c   %c%c%c%c   %c%c%c%c   %c%c%c%c   %c%c%c%c   %c%c%c%c   %c%c%c%c   %c%c%c%c \n",TO_BIN(ret>>24),TO_BIN(ret>>16),TO_BIN(ret>>8),TO_BIN(ret));
+    printf("\n");
+    #endif
+
     return ret;
 }
 
 void sort_sbox_table()
 {
     char **table2 = (char **)malloc(sizeof(char *) * 8);
+    if(!table2)
+    {
+        printf("ERROR! Missing memory for 'table2'");
+        exit(1);
+    }
     char i, j, temp;
 
     for (i = 0; i < 8; i++)
@@ -92,56 +127,120 @@ void sort_sbox_table()
             table2[i][32 + 2 * j + 1] = sbox_table[i][32 + j + 16];
         }
     }
-
     free(sbox_table);
     sbox_table = table2;
 }
 
-long long int iteration(long long int value, long long int key_48)
+uint64_t  iteration(uint64_t  value, uint64_t  key_48)
 {
-    long long int ret = 0;
+    uint64_t  ret = 0;
 
     //F (R,Ki)
-    long long int f = permutation(value, expansion, 48);
+    #ifdef DEBUG
+    printf("expansion 48 ");
+    #endif
+    uint64_t  f = permutation(value, expansion, 48,32);
+
+    #ifdef DEBUG
+    printf("xor %016llx + %016llx = %016llx\n\n",f,key_48,f ^ key_48);
+    #endif
+
     f = f ^ key_48;
     f = s_box(f, sbox_table);
-    f = permutation(f, permutation_32, 32);
+    #ifdef DEBUG
+    printf("permutation 32 ");
+    #endif
+    f = permutation(f, permutation_32, 32,32);
 
     //swap
     ret = swapLR(value, 32);
 
+    #ifdef DEBUG
+    printf("swap %016llx %016llx\n\n",value,ret);
+    #endif
+
     //xor
+    #ifdef DEBUG
+    printf("xor %016llx + %016llx = %016llx\n\n",ret,f,ret ^ f);
+    #endif
     return ret ^ f;
 }
 
-long long int key_i(long long int value, char i)
+uint64_t  key_i(uint64_t  value, char i)
 {
     switch (mode)
     {
     case encrypt:
+        #ifdef DEBUG
+        printf("shift split L %d %d ",i,shift_left[i]);
+        #endif
         return shiftL_circular_split(value, 28, shift_left[i]);
     case decrypt:
+        #ifdef DEBUG
+        printf("shift split R %d %d ",i,shift_left[i]);
+        #endif
         return shiftR_circular_split(value, 28, shift_left[i]);
     }
 }
 
-long long int key_prepare(long long int value)
+uint64_t  key_prepare(char * key)
 {
-    return permutation(value, compress_56, 56);
+    uint64_t  value = 0;
+    char i=0;
+    while(key[i]){
+        value = value<<8 | key[i++];
+    }
+    #ifdef DEBUG
+    printf("compress 56 ");
+    #endif
+    return permutation(value, compress_56, 56,64);
 }
 
-long long block_encrypt(long long int value, long long int key)
+int message_prepare(uint64_t  * blocks, char * message){
+    int i=0,j=-1;
+    while (message[i]){
+        if(!(i%8))
+            blocks[++j]=0;
+        blocks[j] = blocks[j]<<8 || message[i];
+        i++;
+    }
+    while (i%8){
+        blocks[j] = blocks[j]<<8;
+        i++;
+    }
+    blocks[j+1] = 0;
+    return j+1;
+}
+
+long long block_encrypt(uint64_t  value, uint64_t  key)
 {
     char i;
-    value = permutation(value, initial_permutation, 64);
+    uint64_t ret;
+    #ifdef DEBUG
+    printf("initial permutation ");
+    #endif
+    value = permutation(value, initial_permutation, 64,64);
 
     for (i = 0; i < 16; i++)
     {
-        key = key_i(key, mode ? i : (15 - i));
-        value = iteration(value, permutation(key, compress_48, 48));
+        if(mode == encrypt)
+            key = key_i(key, i);
+        #ifdef DEBUG
+        printf("compress key 48 ");
+        #endif
+        value = iteration(value, permutation(key, compress_48, 48,56));
+        if(mode == decrypt)
+            key = key_i(key, 15 - i);
     }
+    ret = swapLR(value, 32);
+    #ifdef DEBUG
+    printf("swap %016llx %016llx\n\n",value,ret);
+    #endif
 
-    return permutation(swapLR(value, 32), final_permutation, 64);
+    #ifdef DEBUG
+    printf("final permutation ");
+    #endif
+    return permutation(ret, final_permutation, 64,64);
 }
 
 void import_values()
@@ -347,7 +446,33 @@ void print_tables(){
 
 int main()
 {
+    char i;
+    uint64_t  key,value;
+    //uint64_t  message[80];
+    //int message_length;
     import_values();
     sort_sbox_table();
-    //print_tables();
+
+    //key = key_prepare(".0[@>?z$");
+    sscanf(" 133457799BBCDFF1 0123456789ABCDEF","%llx %llx",&key,&value);
+    
+    mode = encrypt;
+
+    #ifdef DEBUG
+    printf("compress_56 ");
+    #endif
+    key = permutation(key, compress_56, 56,64);
+    
+    printf("%016llx %016llx\n\n",key,value);
+
+    value = block_encrypt(value,key);
+    printf("encrypted: %016llx \n",value);
+
+    mode = decrypt;
+    //printf("%016llx %016llx\n\n",key,value);
+
+    value = block_encrypt(value,key);
+    printf("decrypted: %016llx \n",value);
+
+
 }
