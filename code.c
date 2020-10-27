@@ -30,7 +30,7 @@ uint64_t  permutation(uint64_t  value, char *positions, int sizef, int sizei)
     
     for (i = 0; i < sizef; i++)
     {
-    //        printf("%c %2d",(i%8)?'\0':'\n',positions[i]);
+//        printf("%c %2d",(i%8)?'\0':'\n',positions[i]);
         bit_recive(ret, sizef-i-1, bit_value(value,sizei-positions[i]));
     }
     #ifdef DEBUG
@@ -445,6 +445,9 @@ void print_tables(){
 void test_block(){
     uint64_t  key,value;
 
+    import_values();
+    sort_sbox_table();
+
     
     sscanf(" 133457799BBCDFF1 0123456789ABCDEF","%llx %llx",&key,&value);//85E813540F0AB405
     //sscanf(" 0E329232EA6D0D73 8787878787878787","%llx %llx",&key,&value);//0000000000000000
@@ -520,7 +523,7 @@ int main(int argc,char ** argv)
 {
     //test_block();
     //test_string();
-    int i;
+    int i,j;
     char key_string[9];
     uint64_t key;
     uint64_t value;
@@ -548,6 +551,9 @@ int main(int argc,char ** argv)
         exit(1);
     }
 
+    import_values();
+    sort_sbox_table();
+
     printf("Inform key: ");
     scanf("%s",key_string);
     key = key_prepare(".0[@>?z$");//
@@ -558,13 +564,17 @@ int main(int argc,char ** argv)
     scanf("%d",&i);
     mode = i!=0;
 
+    //for(j=0;(i = fread(&value,8,1,fplain_text),i==1) && j<20;j++){
+      //  fwrite(&value,8,1,fcypher_text);
+    //}
+
     while(i = fread(&value,8,1,fplain_text),i==1){
-        printf("%016llx\n",value);
+        printf("%016llx %d\n",value,i);
         value = block_encrypt(value,key);
-        printf("%016llx\n",value);
+        //printf("%016llx\n",value);
         fwrite(&value,8,1,fcypher_text);
     }
-    printf("%016llx %d\n",value,i);
+    //printf("%016llx %d\n",value,i);
     
     fclose(fplain_text);
     fclose(fcypher_text);
