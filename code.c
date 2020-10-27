@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 //#define DEBUG
+#define DECRYPT_STEP
 
 #include "bitwiseop.h"
 
@@ -190,10 +191,7 @@ uint64_t  key_prepare(char * key)
     while(key[i]){
         value = value<<8 | key[i++];
     }
-    #ifdef DEBUG
-    printf("compress 56 ");
-    #endif
-    return permutation(value, compress_56, 56,64);
+    return value;
 }
 
 int message_prepare(uint64_t  * blocks, char * message){
@@ -201,7 +199,7 @@ int message_prepare(uint64_t  * blocks, char * message){
     while (message[i]){
         if(!(i%8))
             blocks[++j]=0;
-        blocks[j] = blocks[j]<<8 || message[i];
+        blocks[j] = blocks[j]<<8 | message[i];
         i++;
     }
     while (i%8){
@@ -444,18 +442,13 @@ void print_tables(){
     }
 }
 
-int main()
-{
-    char i;
+void test_block(){
     uint64_t  key,value;
-    //uint64_t  message[80];
-    //int message_length;
-    import_values();
-    sort_sbox_table();
 
-    //key = key_prepare(".0[@>?z$");
-    sscanf(" 133457799BBCDFF1 0123456789ABCDEF","%llx %llx",&key,&value);
     
+    sscanf(" 133457799BBCDFF1 0123456789ABCDEF","%llx %llx",&key,&value);//85E813540F0AB405
+    //sscanf(" 0E329232EA6D0D73 8787878787878787","%llx %llx",&key,&value);//0000000000000000
+
     mode = encrypt;
 
     #ifdef DEBUG
@@ -468,11 +461,111 @@ int main()
     value = block_encrypt(value,key);
     printf("encrypted: %016llx \n",value);
 
+    #ifdef DECRYPT_STEP
     mode = decrypt;
-    //printf("%016llx %016llx\n\n",key,value);
+    printf("%016llx %016llx\n\n",key,value);
 
     value = block_encrypt(value,key);
     printf("decrypted: %016llx \n",value);
+    #endif
+}
+
+void test_string(){
+    char i;
+    char string[] = "Your lips are smoother than vaseline";
+    uint64_t  message[80];
+    uint64_t key;
+    int message_length;
+    import_values();
+    sort_sbox_table();
+    
+    message_length = message_prepare(message,string);
+    message[message_length-1] = message[message_length-1] | 0x0D0A0000;
+
+    key = 0x0E329232EA6D0D73;
 
 
+    #ifdef DEBUG
+    printf("compress_56 ");
+    #endif
+    key = permutation(key, compress_56, 56,64);
+
+    
+    printf("string:\n%s\n",string);
+    
+    mode = encrypt;
+    
+    printf("plain text:\n");
+    for(i=0;i<message_length;i++){
+        printf("%016llx ",message[i]);
+    }
+    printf("\ncypher text:\n");
+    for(i=0;i<message_length;i++){
+        message[i] = block_encrypt(message[i],key);
+        printf("%016llx ",message[i]);
+    }
+
+    #ifdef DECRYPT_STEP
+    mode = decrypt;
+
+    printf("\nplain text:\n");
+    for(i=0;i<message_length;i++){
+        message[i] = block_encrypt(message[i],key);
+        printf("%016llx ",message[i]);
+    }
+    #endif
+}
+
+int main(int argc,char ** argv)
+{
+    //test_block();
+    //test_string();
+    int i;
+    char key_string[9];
+    uint64_t key;
+    uint64_t value;
+    FILE *fplain_text,
+        *fcypher_text;
+
+    if(argc<=1){
+        printf("ERRO! Inform the file's name to be encrypted.");
+        exit(1);
+    }
+    fplain_text = fopen(argv[1],"rb");
+    if(!fplain_text){
+        printf("ERRO! File not found");
+        exit(1);
+    }
+
+    if(argc<=2){
+        fcypher_text = fopen("cypher.txt","ab+");
+    }else{
+        fcypher_text = fopen(argv[2],"ab+");
+    }
+
+    if(!fcypher_text){
+        printf("ERRO! Can't open or create out file!");
+        exit(1);
+    }
+
+    printf("Inform key: ");
+    scanf("%s",key_string);
+    key = key_prepare(".0[@>?z$");//
+
+    printf("%016llx\n",key);
+
+    printf("Choose the process:\n\t1-encrypt\t2-decrypt\n\tinput number:");
+    scanf("%d",&i);
+    mode = i!=0;
+
+    while(i = fread(&value,8,1,fplain_text),i==1){
+        printf("%016llx\n",value);
+        value = block_encrypt(value,key);
+        printf("%016llx\n",value);
+        fwrite(&value,8,1,fcypher_text);
+    }
+    printf("%016llx %d\n",value,i);
+    
+    fclose(fplain_text);
+    fclose(fcypher_text);
 }
