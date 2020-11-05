@@ -2,7 +2,8 @@
 #include <stdlib.h>
 
 //#define DEBUG
-#define DECRYPT_STEP
+//#define DECRYPT_STEP
+//#define ENCRYPT_BMP
 
 #include "bitwiseop.h"
 
@@ -22,6 +23,32 @@ char *initial_permutation,
     **sbox_table;
 
 Mode mode;
+
+uint64_t  permutation(uint64_t  value, char *positions, int sizef, int sizei);
+uint64_t  swapLR(uint64_t  value, int axis);
+uint64_t  shiftL_circular_split(uint64_t  value, int axis, int shift);
+uint64_t  shiftR_circular_split(uint64_t  value, int axis, int shift);
+uint64_t  s_box(uint64_t  value, char **table);
+uint64_t  key_i(uint64_t  value, char i);
+uint64_t  iteration(uint64_t  value, uint64_t  key_48);
+uint64_t block_encrypt(uint64_t  value, uint64_t  key);
+
+void import_values();
+void print_tables();
+void sort_sbox_table();
+
+uint64_t  key_prepare(char * key);
+
+void test_block();
+
+int message_prepare(uint64_t  * blocks, char * message);
+void test_string();
+
+void open_files(int argc,char ** argv,FILE ** plain, FILE ** cypher);
+int fread_person(uint64_t *value,FILE * file);
+void fwrite_person(uint64_t value,FILE * file);
+
+
 
 uint64_t  permutation(uint64_t  value, char *positions, int sizef, int sizei)
 {
@@ -210,7 +237,7 @@ int message_prepare(uint64_t  * blocks, char * message){
     return j+1;
 }
 
-long long block_encrypt(uint64_t  value, uint64_t  key)
+uint64_t block_encrypt(uint64_t  value, uint64_t  key)
 {
     char i;
     uint64_t ret;
@@ -362,6 +389,29 @@ void import_values()
     fclose(tables);
 }
 
+void open_files(int argc,char ** argv,FILE ** plain, FILE ** cypher){
+    if(argc<=1){
+        printf("ERRO! Inform the file's name to be encrypted.");
+        exit(1);
+    }
+    *plain = fopen(argv[1],"rb");
+    if(!*plain){
+        printf("ERRO! File not found");
+        exit(1);
+    }
+
+    if(argc<=2){
+        *cypher = fopen("cypher.txt","ab+");
+    }else{
+        *cypher = fopen(argv[2],"ab+");
+    }
+
+    if(!*cypher){
+        printf("ERRO! Can't open or create out file!");
+        exit(1);
+    }
+}
+
 void print_tables(){
     int i;
 
@@ -459,7 +509,7 @@ void test_block(){
     #endif
     key = permutation(key, compress_56, 56,64);
     
-    printf("%016llx %016llx\n\n",key,value);
+    printf("Key_56: %016llx \t Plain:%016llx\n\n",key,value);
 
     value = block_encrypt(value,key);
     printf("encrypted: %016llx \n",value);
@@ -519,63 +569,87 @@ void test_string(){
     #endif
 }
 
+int fread_person(uint64_t *value,FILE * file){
+    int i,j;
+    char k[8];
+    *value = 0;
+    j=fread(&k,1,8,file);
+    if(j==0)
+        return 0;
+    else{
+        for(i=0;i<j;i++){
+            *value = *value<<8 | (k[i] & bit_range(0,8));
+        }
+        for(;j<8;j++){
+            *value = *value<<8;
+        }
+        return 1;
+    }
+}
+
+void fwrite_person(uint64_t value,FILE * file){
+    int i;
+    char j[8];
+    for(i=0;i<8;i++){
+        j[i] = (value>>(8*(7-i))) & bit_range(0,8);
+    }
+    fwrite(&j,1,8,file);
+}
+
 int main(int argc,char ** argv)
-{
+{    
     //test_block();
     //test_string();
-    int i,j;
+    //*
+    int i,j,k;
     char key_string[9];
+    char v;
     uint64_t key;
     uint64_t value;
     FILE *fplain_text,
         *fcypher_text;
 
-    if(argc<=1){
-        printf("ERRO! Inform the file's name to be encrypted.");
-        exit(1);
-    }
-    fplain_text = fopen(argv[1],"rb");
-    if(!fplain_text){
-        printf("ERRO! File not found");
-        exit(1);
-    }
-
-    if(argc<=2){
-        fcypher_text = fopen("cypher.txt","ab+");
-    }else{
-        fcypher_text = fopen(argv[2],"ab+");
-    }
-
-    if(!fcypher_text){
-        printf("ERRO! Can't open or create out file!");
-        exit(1);
-    }
+    open_files(argc,argv,&fplain_text,&fcypher_text);
 
     import_values();
     sort_sbox_table();
 
     printf("Inform key: ");
     scanf("%s",key_string);
-    key = key_prepare(".0[@>?z$");//
+    key = key_prepare(key_string);//12345678 //.0[@>?z$
+    //sscanf(" 0E329232EA6D0D73 ","%llx",&key);
 
-    printf("%016llx\n",key);
+    printf("\nKey - %016llx ;\n",key);
 
-    printf("Choose the process:\n\t1-encrypt\t2-decrypt\n\tinput number:");
+    #ifdef DEBUG
+    printf("compress_56 ");
+    #endif
+    key = permutation(key, compress_56, 56,64);
+
+    printf("\nKey 56 - %016llx ;\n",key);
+
+    printf("Choose the process:\n\t1-encrypt\t0-decrypt\n\tinput number:");
     scanf("%d",&i);
     mode = i!=0;
 
-    //for(j=0;(i = fread(&value,8,1,fplain_text),i==1) && j<20;j++){
-      //  fwrite(&value,8,1,fcypher_text);
-    //}
-
-    while(i = fread(&value,8,1,fplain_text),i==1){
-        printf("%016llx %d\n",value,i);
-        value = block_encrypt(value,key);
-        //printf("%016llx\n",value);
-        fwrite(&value,8,1,fcypher_text);
+    #ifdef ENCRYPT_BMP
+    for(j=0;j<54;j++){
+        fread(&v,1,1,fplain_text);
+        fwrite(&v,1,1,fcypher_text);
     }
+    #endif
+
+    while(i = fread_person(&value,fplain_text),i==1){
+        //printf("%016llx %d\n",value,i);
+        value = block_encrypt(value,key);
+        //printf("%016llx\n\n",value);
+        fwrite_person(value,fcypher_text);
+    }
+    //printf("\n");
     //printf("%016llx %d\n",value,i);
+    
     
     fclose(fplain_text);
     fclose(fcypher_text);
+    /**/   
 }
